@@ -1,0 +1,93 @@
+--list all products (ProductName) with their CategoryName and SupplierName.
+SELECT p.ProductName, c.CategoryName, s.CompanyName AS SupplierName 
+FROM Products p 
+JOIN Categories c ON p.CategoryID = c.CategoryID 
+JOIN Suppliers s ON p.SupplierID = s.SupplierID;
+
+--Find all customers who have never placed an order. Display the CustomerID and CompanyName.
+SELECT c.CustomerID, c.CompanyName
+FROM Customers c
+LEFT JOIN Orders o ON c.CustomerID = o.CustomerID
+WHERE o.OrderID IS NULL;
+
+--List the top 5 employees by total sales amount. Include EmployeeID, FirstName, LastName, and TotalSales.
+SELECT TOP 5 
+    e.EmployeeID, 
+    e.FirstName, 
+    e.LastName, 
+    SUM(od.UnitPrice * od.Quantity) AS TotalSales
+FROM Employees e
+JOIN Orders o ON e.EmployeeID = o.EmployeeID
+JOIN [Order Details] od ON o.OrderID = od.OrderID
+GROUP BY e.EmployeeID, e.FirstName, e.LastName
+ORDER BY TotalSales DESC;
+
+
+--Add a new product to the Products table
+INSERT INTO Products (ProductName, SupplierID, CategoryID, QuantityPerUnit, UnitPrice, UnitsInStock, UnitsOnOrder, ReorderLevel, Discontinued)
+VALUES ('Northwind Coffee', 1, 1, '10 boxes x 20 bags', 18.00, 39, 0, 10, 0);
+
+--Increase the UnitPrice of all products in the "Beverages" category by 10%.
+UPDATE Products
+SET UnitPrice = UnitPrice * 1.10
+WHERE CategoryID = (SELECT CategoryID FROM Categories WHERE CategoryName = 'Beverages');
+
+--Insert a new order for customer VINET with today's date.
+INSERT INTO Orders (CustomerID, OrderDate)
+VALUES ('VINET', GETDATE());
+
+--Delete the order you just created.
+DELETE FROM Orders 
+WHERE OrderID = (SELECT MAX(OrderID) FROM Orders WHERE CustomerID = 'VINET');
+
+--Create a new table named "ProductReviews" 
+CREATE TABLE ProductReviews (
+    ReviewID INT PRIMARY KEY IDENTITY(1,1),
+    ProductID INT NOT NULL,
+    CustomerID NCHAR(5) NOT NULL,
+    Rating INT CHECK (Rating BETWEEN 1 AND 5),
+    ReviewText NVARCHAR(MAX),
+    ReviewDate DATETIME NOT NULL DEFAULT GETDATE(),
+    FOREIGN KEY (ProductID) REFERENCES Products(ProductID),
+    FOREIGN KEY (CustomerID) REFERENCES Customers(CustomerID)
+);
+
+--Create a view named "vw_ProductSales" that shows ProductName, CategoryName, and TotalSales (sum of UnitPrice * Quantity) for each product.
+CREATE VIEW vw_ProductSales AS
+SELECT 
+    p.ProductName, 
+    c.CategoryName, 
+    SUM(od.UnitPrice * od.Quantity) AS TotalSales
+FROM Products p
+JOIN Categories c ON p.CategoryID = c.CategoryID
+JOIN [Order Details] od ON p.ProductID = od.ProductID
+GROUP BY p.ProductName, c.CategoryName;
+
+--Write a stored procedure named "sp_TopCustomersByCountry" that takes a country name as input and returns the top 3 customers by total order amount for that country.
+CREATE PROCEDURE sp_TopCustomersByCountry 
+    @Country NVARCHAR(50)
+AS
+BEGIN
+    SELECT TOP 3 
+        c.CustomerID, 
+        c.CompanyName, 
+        SUM(od.UnitPrice * od.Quantity) AS TotalOrderAmount
+    FROM Customers c
+    JOIN Orders o ON c.CustomerID = o.CustomerID
+    JOIN [Order Details] od ON o.OrderID = od.OrderID
+    WHERE c.Country = @Country
+    GROUP BY c.CustomerID, c.CompanyName
+    ORDER BY TotalOrderAmount DESC;
+END;
+
+--Write a query to find the employee who has processed orders for the most unique products. Display the EmployeeID, FirstName, LastName, and the count of unique products they've processed.
+SELECT TOP 1 
+    e.EmployeeID, 
+    e.FirstName, 
+    e.LastName, 
+    COUNT(DISTINCT od.ProductID) AS UniqueProductsProcessed
+FROM Employees e
+JOIN Orders o ON e.EmployeeID = o.EmployeeID
+JOIN [Order Details] od ON o.OrderID = od.OrderID
+GROUP BY e.EmployeeID, e.FirstName, e.LastName
+ORDER BY UniqueProductsProcessed DESC;
