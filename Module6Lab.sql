@@ -126,3 +126,82 @@ WHERE BookID = 1;
 
 -- Check the audit table
 SELECT * FROM BookPriceAudit;
+
+-- create a BookReviews table
+CREATE TABLE BookReviews (
+    ReviewID INT PRIMARY KEY IDENTITY(1,1),
+    BookID INT,
+    CustomerID NCHAR(5),
+    Rating INT CHECK (Rating BETWEEN 1 AND 5),
+    ReviewText NVARCHAR(MAX),
+    ReviewDate DATE,
+    FOREIGN KEY (BookID) REFERENCES Books(BookID),
+    FOREIGN KEY (CustomerID) REFERENCES Customers(CustomerID)
+);
+
+--Create a view named vw_BookReviewStats
+CREATE VIEW vw_BookReviewStats AS
+SELECT 
+    b.Title AS BookTitle,
+    COUNT(br.ReviewID) AS TotalReviews,
+    AVG(CAST(br.Rating AS DECIMAL(3,2))) AS AverageRating,
+    MAX(br.ReviewDate) AS MostRecentReviewDate
+FROM Books b LEFT JOIN BookReviews br ON b.BookID = br.BookID
+GROUP BY b.Title;
+
+--a) Create a trigger named tr_ValidateReviewDate
+CREATE TRIGGER tr_ValidateReviewDate
+ON BookReviews
+AFTER INSERT
+AS
+BEGIN
+    IF EXISTS (SELECT 1 FROM inserted WHERE ReviewDate > GETDATE())
+    BEGIN
+        RAISERROR ('Review date cannot be in the future.', 16, 1);
+        ROLLBACK TRANSACTION;
+    END
+END;
+
+--b) Create a trigger named tr_UpdateBookRating
+
+--add an AverageRating column (DECIMAL(3,2)) to the Books table
+ALTER TABLE Books ADD AverageRating DECIMAL(3,2) NULL;
+
+--Create a trigger named tr_UpdateBookRating
+CREATE TRIGGER tr_UpdateBookRating
+ON BookReviews
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    UPDATE Books
+    SET AverageRating = (
+        SELECT AVG(CAST(Rating AS DECIMAL(3,2)))
+        FROM BookReviews
+        WHERE BookReviews.BookID = Books.BookID
+    )
+    WHERE EXISTS (SELECT 1 FROM BookReviews WHERE BookReviews.BookID = Books.BookID);
+END;
+
+--Test
+
+--Insert at least 3 reviews for different books
+INSERT INTO BookReviews (BookID, CustomerID, Rating, ReviewText, ReviewDate) 
+VALUES 
+(1, 'ALFKI', 5, 'Amazing book.', '2024-02-01'),
+(2, 'BOLID', 3, 'Decent read.', '2024-02-15'),
+(3, 'FISSA', 4, 'Very informative.', '2024-02-20');
+
+--Try to insert a review with a future date (should fail)
+INSERT INTO BookReviews (BookID, CustomerID, Rating, ReviewText, ReviewDate) 
+VALUES (1, 'ALFKI', 4, 'Great book.', '2025-03-25');
+
+--Checking the statistics view
+SELECT * FROM vw_BookReviewStats;
+
+--Update a review's rating 
+UPDATE BookReviews
+SET Rating = 2
+WHERE ReviewID = 2;
+
+--Verify the book's average rating updates automatically
+SELECT BookID, AverageRating FROM Books;
