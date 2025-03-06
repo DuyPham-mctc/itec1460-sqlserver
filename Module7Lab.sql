@@ -52,3 +52,36 @@ EXEC CalculateOrderTotal
 
 PRINT 'Returned total amount: $' + CAST(ISNULL(@TotalAmount, 0) AS NVARCHAR(20));
 GO
+
+-- =============================================
+-- Part 2: CheckProductStock Procedure
+-- =============================================
+
+CREATE OR ALTER PROCEDURE CheckProductStock
+    @ProductID INT,
+    @NeedsReorder BIT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Check if the product's UnitsInStock is below the ReorderLevel
+    DECLARE @UnitsInStock INT, @ReorderLevel INT;
+
+    SELECT @UnitsInStock = UnitsInStock, @ReorderLevel = ReorderLevel
+    FROM Products
+    WHERE ProductID = @ProductID;
+
+    -- Determine if reordering is needed
+    IF @UnitsInStock < @ReorderLevel
+        SET @NeedsReorder = 1;
+    ELSE
+        SET @NeedsReorder = 0;
+END
+GO
+
+-- Test the new procedure
+DECLARE @NeedsReorder BIT;
+EXEC CheckProductStock 
+    @ProductID = 11,
+    @NeedsReorder = @NeedsReorder OUTPUT;
+PRINT 'Needs Reorder: ' + CAST(@NeedsReorder AS VARCHAR(1));
